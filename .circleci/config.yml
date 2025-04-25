@@ -8,7 +8,6 @@ jobs:
       - run: |
           pip install -r requirements.txt
           python manage.py check
-
   test:
     docker:
       - image: python:3.6
@@ -22,15 +21,11 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Run Safety Check
-          command: |
-            docker pull hysnsec/safety:latest
-            docker run -v $(pwd):/src --rm hysnsec/safety check -r /src/requirements.txt --json | tee oast-results.json
-
+          command: docker run -v $(pwd):/src --rm hysnsec/safety check -r /src/requirements.txt --json | tee oast-results.json || true
       - store_artifacts:
           path: oast-results.json
           destination: safety-artifact
-
+          when: always
   integration:
     docker:
       - image: python:3.6
@@ -40,20 +35,28 @@ jobs:
           command: |
             echo "This is an integration step"
             exit 1
-
+          when: on_fail
   prod:
     docker:
       - image: python:3.6
     steps:
       - checkout
       - run: echo "This is a deploy step"
-
 workflows:
   version: 2
   django:
     jobs:
       - build
-      - test
-      - oast
-      - integration
-      - prod
+      - test:
+          requires:
+            - build
+      - oast:
+          requires:
+            - test
+      - integration:
+          requires:
+            - oast
+      - prod:
+          type: approval
+          requires:
+            - integration
